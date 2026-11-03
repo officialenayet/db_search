@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>ডেটাবেজ সার্চ সিস্টেম</title>
     <!-- DuckDB-Wasm CDN Script -->
-    <script src="https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@latest/dist/duckdb-wasm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-wasm.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f6f8; }
         .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
@@ -13,7 +13,9 @@
         input { padding: 8px; width: 180px; border: 1px solid #ccc; border-radius: 4px; }
         button { padding: 10px 25px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; }
         button:hover { background: #0056b3; }
+        button:disabled { background: #cccccc; cursor: not-allowed; }
         .status { margin-top: 15px; font-weight: bold; color: #28a745; }
+        .error { color: #dc3545; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         th { background: #343a40; color: white; }
@@ -53,27 +55,34 @@
         let db;
         let conn;
 
-        // আপনার GitHub Releases থেকে কপি করা .zip ফাইলের সরাসরি লিংকটি এখানে বসান
-        const ZIP_FILE_URL = "https://github.com/user-attachments/files/34337530/data.zip";
+        // আপনার GitHub Releases থেকে কপি করা আসল জিপ লিংকটি এখানে দেবেন
+        const ZIP_FILE_URL = "https://github.com/officialenayet/db_search/archive/refs/tags/v1.0.zip";
 
         async function initDuckDB() {
+            const statusDiv = document.getElementById('initStatus');
             try {
+                // ১. DuckDB Wasm ইনিশিয়ালাইজেশন
                 const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
                 const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
                 const worker = await duckdb.createWorker(bundle.mainWorker);
                 const logger = new duckdb.ConsoleLogger();
+                
                 db = new duckdb.AsyncDuckDB(logger, worker);
                 await db.instantiate(bundle.mainModule);
                 conn = await db.connect();
 
-                // জিপ ফাইলটি ব্রাউজারের ভার্চুয়াল মেমরিতে রেজিস্টার করা
+                statusDiv.innerText = "ফাইল রেজিস্টার করা হচ্ছে...";
+
+                // ২. HTTP-এর মাধ্যমে জিপ ফাইল DuckDB-তে রেজিস্টার করা
                 await db.registerFileURL('data.zip', ZIP_FILE_URL, duckdb.DuckDBDataProtocol.HTTP, false);
 
-                document.getElementById('initStatus').innerText = "সার্চ ইঞ্জিন প্রস্তুত! আপনি এখন সার্চ করতে পারেন।";
+                // ৩. ফাইল চেক করার জন্য টেস্ট ক্যোয়ারি
+                statusDiv.innerText = "সার্চ ইঞ্জিন প্রস্তুত! আপনি এখন সার্চ করতে পারেন।";
                 document.getElementById('searchBtn').disabled = false;
             } catch(e) {
-                console.error(e);
-                document.getElementById('initStatus').innerText = "ইনিশিয়ালাইজ করতে ব্যর্থ হয়েছে!";
+                console.error("DuckDB Init Error: ", e);
+                statusDiv.className = "status error";
+                statusDiv.innerText = "ইনিশিয়ালাইজ করতে ব্যর্থ হয়েছে! (Error: " + e.message + ")";
             }
         }
 
@@ -104,7 +113,7 @@
             countDiv.innerText = '';
 
             try {
-                // জিপ ফাইলের ভেতরে থাকা parquet ফাইল পড়ার জন্য zip:// প্রিফিক্স ব্যবহার করা হয়
+                // zip://*.parquet@data.zip অথবা zip://data.parquet@data.zip ব্যবহার করা
                 const sql = `SELECT name, father_name, mother_name, dob, address FROM read_parquet('zip://*.parquet@data.zip') WHERE ${whereClause} LIMIT 100`;
                 const countSql = `SELECT COUNT(*) as total FROM read_parquet('zip://*.parquet@data.zip') WHERE ${whereClause}`;
 
@@ -132,8 +141,8 @@
                     </tr>`;
                 });
             } catch(err) {
-                console.error(err);
-                tbody.innerHTML = '<tr><td colspan="5">সার্চে ভুল হয়েছে! আবার চেষ্টা করুন।</td></tr>';
+                console.error("Search Error: ", err);
+                tbody.innerHTML = `<tr><td colspan="5">সার্চ করতে সমস্যা হয়েছে! (Error: ${err.message})</td></tr>`;
             }
         }
 
