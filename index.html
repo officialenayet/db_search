@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <title>ডেটাবেজ সার্চ সিস্টেম</title>
+    <!-- DuckDB-Wasm CDN Script -->
+    <script src="https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@latest/dist/duckdb-wasm.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f6f8; }
+        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .form-group { display: inline-block; margin-right: 15px; margin-bottom: 12px; }
+        label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 14px; }
+        input { padding: 8px; width: 180px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 25px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; }
+        button:hover { background: #0056b3; }
+        .status { margin-top: 15px; font-weight: bold; color: #28a745; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #343a40; color: white; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>অ্যাডভান্সড ফিল্টার সার্চ সিস্টেম</h2>
+        <div id="initStatus">সার্চ ইঞ্জিন লোড হচ্ছে... অনুগ্রহ করে অপেক্ষা করুন।</div>
+        <hr>
+        <div class="form-group"><label>নাম</label><input type="text" id="name" placeholder="যেমন: এনায়েত"></div>
+        <div class="form-group"><label>বাবার নাম</label><input type="text" id="father_name" placeholder="যেমন: করিম"></div>
+        <div class="form-group"><label>মায়ের নাম</label><input type="text" id="mother_name" placeholder="যেমন: জরিনা"></div>
+        <div class="form-group"><label>ঠিকানা</label><input type="text" id="address" placeholder="যেমন: নবীনগর"></div>
+        <div class="form-group"><label>জন্ম তারিখ</label><input type="text" id="dob" placeholder="যেমন: 20/10/2000"></div>
+        <br>
+        <button id="searchBtn" onclick="searchData()" disabled>সার্চ করুন</button>
+    </div>
+
+    <div id="resultCount" class="status"></div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>নাম</th>
+                <th>বাবার নাম</th>
+                <th>মায়ের নাম</th>
+                <th>জন্ম তারিখ</th>
+                <th>ঠিকানা</th>
+            </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+    </table>
+
+    <script>
+        let db;
+        let conn;
+
+        // আপনার GitHub Releases থেকে কপি করা .zip ফাইলের সরাসরি লিংকটি এখানে বসান
+        const ZIP_FILE_URL = "https://github.com/user-attachments/files/34337199/Dhaka-19_Ashulia.zip";
+
+        async function initDuckDB() {
+            try {
+                const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
+                const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+                const worker = await duckdb.createWorker(bundle.mainWorker);
+                const logger = new duckdb.ConsoleLogger();
+                db = new duckdb.AsyncDuckDB(logger, worker);
+                await db.instantiate(bundle.mainModule);
+                conn = await db.connect();
+
+                // জিপ ফাইলটি ব্রাউজারের ভার্চুয়াল মেমরিতে রেজিস্টার করা
+                await db.registerFileURL('data.zip', ZIP_FILE_URL, duckdb.DuckDBDataProtocol.HTTP, false);
+
+                document.getElementById('initStatus').innerText = "সার্চ ইঞ্জিন প্রস্তুত! আপনি এখন সার্চ করতে পারেন।";
+                document.getElementById('searchBtn').disabled = false;
+            } catch(e) {
+                console.error(e);
+                document.getElementById('initStatus').innerText = "ইনিশিয়ালাইজ করতে ব্যর্থ হয়েছে!";
+            }
+        }
+
+        async function searchData() {
+            const name = document.getElementById('name').value.trim();
+            const father_name = document.getElementById('father_name').value.trim();
+            const mother_name = document.getElementById('mother_name').value.trim();
+            const address = document.getElementById('address').value.trim();
+            const dob = document.getElementById('dob').value.trim();
+
+            if(!name && !father_name && !mother_name && !address && !dob) {
+                alert("কমপক্ষে একটি ইনপুট প্রদান করুন!");
+                return;
+            }
+
+            let conditions = [];
+            if(name) conditions.push(`name LIKE '%${name}%'`);
+            if(father_name) conditions.push(`father_name LIKE '%${father_name}%'`);
+            if(mother_name) conditions.push(`mother_name LIKE '%${mother_name}%'`);
+            if(address) conditions.push(`address LIKE '%${address}%'`);
+            if(dob) conditions.push(`dob LIKE '%${dob}%'`);
+
+            const whereClause = conditions.join(" AND ");
+            const tbody = document.getElementById('resultsBody');
+            const countDiv = document.getElementById('resultCount');
+            
+            tbody.innerHTML = '<tr><td colspan="5">খোঁজা হচ্ছে...</td></tr>';
+            countDiv.innerText = '';
+
+            try {
+                // জিপ ফাইলের ভেতরে থাকা parquet ফাইল পড়ার জন্য zip:// প্রিফিক্স ব্যবহার করা হয়
+                const sql = `SELECT name, father_name, mother_name, dob, address FROM read_parquet('zip://*.parquet@data.zip') WHERE ${whereClause} LIMIT 100`;
+                const countSql = `SELECT COUNT(*) as total FROM read_parquet('zip://*.parquet@data.zip') WHERE ${whereClause}`;
+
+                const result = await conn.query(sql);
+                const countResult = await conn.query(countSql);
+
+                const rows = result.toArray().map(r => r.toJSON());
+                const totalCount = countResult.toArray()[0].toJSON().total;
+
+                tbody.innerHTML = '';
+                countDiv.innerText = `মোট রেজাল্ট পাওয়া গেছে: ${totalCount} টি`;
+
+                if(rows.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5">কোনো তথ্য পাওয়া যায়নি!</td></tr>';
+                    return;
+                }
+
+                rows.forEach(item => {
+                    tbody.innerHTML += `<tr>
+                        <td>${item.name || ''}</td>
+                        <td>${item.father_name || ''}</td>
+                        <td>${item.mother_name || ''}</td>
+                        <td>${item.dob || ''}</td>
+                        <td>${item.address || ''}</td>
+                    </tr>`;
+                });
+            } catch(err) {
+                console.error(err);
+                tbody.innerHTML = '<tr><td colspan="5">সার্চে ভুল হয়েছে! আবার চেষ্টা করুন।</td></tr>';
+            }
+        }
+
+        initDuckDB();
+    </script>
+</body>
+</html>
