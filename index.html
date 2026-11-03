@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ডেটাবেজ সার্চ সিস্টেম</title>
+    <!-- DuckDB-Wasm CDN Script -->
+    <script src="https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-wasm.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f6f8; }
         .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
@@ -50,10 +52,7 @@
         <tbody id="resultsBody"></tbody>
     </table>
 
-    <!-- ES Module ব্যবহার করা হয়েছে যেন duckdb undefined না থাকে -->
-    <script type="module">
-        import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
-
+    <script>
         let db;
         let conn;
 
@@ -63,25 +62,25 @@
         async function initDuckDB() {
             const statusDiv = document.getElementById('initStatus');
             try {
-                statusDiv.innerText = "DuckDB লাইব্রেরি লোড হচ্ছে...";
+                if (typeof duckdb === 'undefined') {
+                    throw new Error("DuckDB লাইব্রেরি লোড হয়নি!");
+                }
 
-                const MANUAL_BUNDLES = {
-                    mvp: {
-                        mainModule: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-mvp.wasm',
-                        mainWorker: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-browser-mvp.worker.js',
-                    },
-                    eh: {
-                        mainModule: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-eh.wasm',
-                        mainWorker: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-browser-eh.worker.js',
-                    },
-                };
+                statusDiv.innerText = "DuckDB বান্ডেল সিলেক্ট করা হচ্ছে...";
 
-                const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-                const worker = new Worker(bundle.mainWorker);
+                const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
+                const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+
+                // CORS সমস্যা এড়াতে Blob URL দিয়ে Worker তৈরি করা
+                const worker_url = URL.createObjectURL(
+                    new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' })
+                );
+
+                const worker = new Worker(worker_url);
                 const logger = new duckdb.ConsoleLogger();
 
                 db = new duckdb.AsyncDuckDB(logger, worker);
-                await db.instantiate(bundle.mainModule);
+                await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
                 conn = await db.connect();
 
                 statusDiv.innerText = "জিপ ফাইল রেজিস্টার করা হচ্ছে...";
@@ -157,7 +156,7 @@
             }
         }
 
-        // ইভেন্ট লিসেনার সেটআপ
+        // ইভেন্ট লিসেনার
         document.getElementById('searchBtn').addEventListener('click', searchData);
         window.addEventListener('load', initDuckDB);
     </script>
