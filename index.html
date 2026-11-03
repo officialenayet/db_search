@@ -61,22 +61,30 @@
         async function initDuckDB() {
             const statusDiv = document.getElementById('initStatus');
             try {
-                // ১. DuckDB Wasm ইনিশিয়ালাইজেশন
+                // চেক করা যে duckdb অবজেক্ট লোড হয়েছে কিনা
+                if (typeof duckdb === 'undefined') {
+                    throw new Error("DuckDB লাইব্রেরি লোড হতে ব্যর্থ হয়েছে!");
+                }
+
                 const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
                 const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
-                const worker = await duckdb.createWorker(bundle.mainWorker);
+                
+                const worker_url = URL.createObjectURL(
+                    new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' })
+                );
+
+                const worker = new Worker(worker_url);
                 const logger = new duckdb.ConsoleLogger();
                 
                 db = new duckdb.AsyncDuckDB(logger, worker);
-                await db.instantiate(bundle.mainModule);
+                await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
                 conn = await db.connect();
 
                 statusDiv.innerText = "ফাইল রেজিস্টার করা হচ্ছে...";
 
-                // ২. HTTP-এর মাধ্যমে জিপ ফাইল DuckDB-তে রেজিস্টার করা
+                // জিপ ফাইলটি DuckDB-তে রেজিস্টার করা
                 await db.registerFileURL('data.zip', ZIP_FILE_URL, duckdb.DuckDBDataProtocol.HTTP, false);
 
-                // ৩. ফাইল চেক করার জন্য টেস্ট ক্যোয়ারি
                 statusDiv.innerText = "সার্চ ইঞ্জিন প্রস্তুত! আপনি এখন সার্চ করতে পারেন।";
                 document.getElementById('searchBtn').disabled = false;
             } catch(e) {
@@ -113,7 +121,6 @@
             countDiv.innerText = '';
 
             try {
-                // zip://*.parquet@data.zip অথবা zip://data.parquet@data.zip ব্যবহার করা
                 const sql = `SELECT name, father_name, mother_name, dob, address FROM read_parquet('zip://*.parquet@data.zip') WHERE ${whereClause} LIMIT 100`;
                 const countSql = `SELECT COUNT(*) as total FROM read_parquet('zip://*.parquet@data.zip') WHERE ${whereClause}`;
 
@@ -146,7 +153,8 @@
             }
         }
 
-        initDuckDB();
+        // পেজ লোড হওয়ার সাথে সাথে ইনিশিয়ালাইজ শুরু হবে
+        window.onload = initDuckDB;
     </script>
 </body>
 </html>
