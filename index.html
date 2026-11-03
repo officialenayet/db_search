@@ -2,9 +2,8 @@
 <html lang="bn">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ডেটাবেজ সার্চ সিস্টেম</title>
-    <!-- DuckDB-Wasm CDN Script -->
-    <script src="https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-wasm.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f6f8; }
         .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
@@ -33,7 +32,7 @@
         <div class="form-group"><label>ঠিকানা</label><input type="text" id="address" placeholder="যেমন: নবীনগর"></div>
         <div class="form-group"><label>জন্ম তারিখ</label><input type="text" id="dob" placeholder="যেমন: 20/10/2000"></div>
         <br>
-        <button id="searchBtn" onclick="searchData()" disabled>সার্চ করুন</button>
+        <button id="searchBtn" disabled>সার্চ করুন</button>
     </div>
 
     <div id="resultCount" class="status"></div>
@@ -51,33 +50,43 @@
         <tbody id="resultsBody"></tbody>
     </table>
 
-        <script>
+    <!-- ES Module ব্যবহার করা হয়েছে যেন duckdb undefined না থাকে -->
+    <script type="module">
+        import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
+
         let db;
         let conn;
 
-        // আপনার জিপ ফাইলের সঠিক লিংক
-        const ZIP_FILE_URL = "https://github.com/officialenayet/db_search/archive/refs/tags/v1.0.zip";
+        // আপনার GitHub Releases এর আসল ডাউনলোড লিংক
+        const ZIP_FILE_URL = "https://github.com/user-attachments/files/34337655/data.zip";
 
         async function initDuckDB() {
             const statusDiv = document.getElementById('initStatus');
             try {
                 statusDiv.innerText = "DuckDB লাইব্রেরি লোড হচ্ছে...";
 
-                // ১. অফিসিয়াল unpkg বা jsDelivr বান্ডেল ব্যবহার
-                const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
-                const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+                const MANUAL_BUNDLES = {
+                    mvp: {
+                        mainModule: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-mvp.wasm',
+                        mainWorker: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-browser-mvp.worker.js',
+                    },
+                    eh: {
+                        mainModule: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-eh.wasm',
+                        mainWorker: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-browser-eh.worker.js',
+                    },
+                };
 
-                // ২. Worker তৈরির নিরাপদ পদ্ধতি (Blob URL এর পরিবর্তে সরাসরি বান্ডেল ব্যবহার)
+                const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
                 const worker = new Worker(bundle.mainWorker);
                 const logger = new duckdb.ConsoleLogger();
-                
+
                 db = new duckdb.AsyncDuckDB(logger, worker);
                 await db.instantiate(bundle.mainModule);
                 conn = await db.connect();
 
                 statusDiv.innerText = "জিপ ফাইল রেজিস্টার করা হচ্ছে...";
 
-                // ৩. জিপ ফাইল DuckDB-তে রেজিস্টার করা
+                // জিপ ফাইল DuckDB তে রেজিস্টার
                 await db.registerFileURL('data.zip', ZIP_FILE_URL, duckdb.DuckDBDataProtocol.HTTP, false);
 
                 statusDiv.innerText = "সার্চ ইঞ্জিন প্রস্তুত! আপনি এখন সার্চ করতে পারেন।";
@@ -148,8 +157,9 @@
             }
         }
 
-        window.onload = initDuckDB;
-        </script>
-    
+        // ইভেন্ট লিসেনার সেটআপ
+        document.getElementById('searchBtn').addEventListener('click', searchData);
+        window.addEventListener('load', initDuckDB);
+    </script>
 </body>
 </html>
