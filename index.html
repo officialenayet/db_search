@@ -55,15 +55,19 @@
         let db;
         let conn;
 
-        // আপনার GitHub Releases থেকে কপি করা আসল জিপ লিংকটি এখানে দেবেন
-        const ZIP_FILE_URL = "https://github.com/officialenayet/db_search/archive/refs/tags/v1.0.zip";
+        // আপনার GitHub Releases থেকে কপি করা সঠিক জিপ ফাইলের ডিরেক্ট লিংকটি এখানে দিন
+        const ZIP_FILE_URL = "Ihttps://github.com/officialenayet/db_search/archive/refs/tags/v1.0.zip";
 
         async function initDuckDB() {
             const statusDiv = document.getElementById('initStatus');
             try {
-                // চেক করা যে duckdb অবজেক্ট লোড হয়েছে কিনা
+                // একটু সময় দেওয়া যাতে CDN স্ক্রিপ্ট ব্রাউজারে পুরোপুরি লোড হতে পারে
                 if (typeof duckdb === 'undefined') {
-                    throw new Error("DuckDB লাইব্রেরি লোড হতে ব্যর্থ হয়েছে!");
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+
+                if (typeof duckdb === 'undefined') {
+                    throw new Error("DuckDB লাইব্রেরি লোড হতে ব্যর্থ হয়েছে! ইন্টারনেট বা CDN ব্লক থাকতে পারে।");
                 }
 
                 const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
@@ -90,7 +94,7 @@
             } catch(e) {
                 console.error("DuckDB Init Error: ", e);
                 statusDiv.className = "status error";
-                statusDiv.innerText = "ইনিশিয়ালাইজ করতে ব্যর্থ হয়েছে! (Error: " + e.message + ")";
+                statusDiv.innerText = "ইনিশিয়ালাইজ করতে ব্যর্থ হয়েছে! (" + e.message + ")";
             }
         }
 
@@ -153,7 +157,6 @@
             }
         }
 
-        // পেজ লোড হওয়ার সাথে সাথে ইনিশিয়ালাইজ শুরু হবে
         window.onload = initDuckDB;
     </script>
 </body>
