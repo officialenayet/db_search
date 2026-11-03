@@ -51,42 +51,33 @@
         <tbody id="resultsBody"></tbody>
     </table>
 
-    <script>
+        <script>
         let db;
         let conn;
 
-        // আপনার GitHub Releases থেকে কপি করা সঠিক জিপ ফাইলের ডিরেক্ট লিংকটি এখানে দিন
-        const ZIP_FILE_URL = "Ihttps://github.com/officialenayet/db_search/archive/refs/tags/v1.0.zip";
+        // আপনার জিপ ফাইলের সঠিক লিংক
+        const ZIP_FILE_URL = "https://github.com/officialenayet/db_search/archive/refs/tags/v1.0.zip";
 
         async function initDuckDB() {
             const statusDiv = document.getElementById('initStatus');
             try {
-                // একটু সময় দেওয়া যাতে CDN স্ক্রিপ্ট ব্রাউজারে পুরোপুরি লোড হতে পারে
-                if (typeof duckdb === 'undefined') {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
+                statusDiv.innerText = "DuckDB লাইব্রেরি লোড হচ্ছে...";
 
-                if (typeof duckdb === 'undefined') {
-                    throw new Error("DuckDB লাইব্রেরি লোড হতে ব্যর্থ হয়েছে! ইন্টারনেট বা CDN ব্লক থাকতে পারে।");
-                }
-
+                // ১. অফিসিয়াল unpkg বা jsDelivr বান্ডেল ব্যবহার
                 const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
                 const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
-                
-                const worker_url = URL.createObjectURL(
-                    new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' })
-                );
 
-                const worker = new Worker(worker_url);
+                // ২. Worker তৈরির নিরাপদ পদ্ধতি (Blob URL এর পরিবর্তে সরাসরি বান্ডেল ব্যবহার)
+                const worker = new Worker(bundle.mainWorker);
                 const logger = new duckdb.ConsoleLogger();
                 
                 db = new duckdb.AsyncDuckDB(logger, worker);
-                await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+                await db.instantiate(bundle.mainModule);
                 conn = await db.connect();
 
-                statusDiv.innerText = "ফাইল রেজিস্টার করা হচ্ছে...";
+                statusDiv.innerText = "জিপ ফাইল রেজিস্টার করা হচ্ছে...";
 
-                // জিপ ফাইলটি DuckDB-তে রেজিস্টার করা
+                // ৩. জিপ ফাইল DuckDB-তে রেজিস্টার করা
                 await db.registerFileURL('data.zip', ZIP_FILE_URL, duckdb.DuckDBDataProtocol.HTTP, false);
 
                 statusDiv.innerText = "সার্চ ইঞ্জিন প্রস্তুত! আপনি এখন সার্চ করতে পারেন।";
@@ -158,6 +149,7 @@
         }
 
         window.onload = initDuckDB;
-    </script>
+        </script>
+    
 </body>
 </html>
