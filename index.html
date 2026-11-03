@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ডেটাবেজ সার্চ সিস্টেম</title>
-    <!-- DuckDB-Wasm CDN Script -->
-    <script src="https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-wasm.js"></script>
+    <!-- unpkg থেকে DuckDB-Wasm স্ক্রিপ্ট লোড করা -->
+    <script src="https://unpkg.com/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-wasm.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f6f8; }
         .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
@@ -62,15 +62,32 @@
         async function initDuckDB() {
             const statusDiv = document.getElementById('initStatus');
             try {
+                // লাইব্রেরি লোড হওয়ার জন্য ১ সেকেন্ড অপেক্ষা করা
+                let attempts = 0;
+                while (typeof duckdb === 'undefined' && attempts < 10) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    attempts++;
+                }
+
                 if (typeof duckdb === 'undefined') {
-                    throw new Error("DuckDB লাইব্রেরি লোড হয়নি!");
+                    throw new Error("DuckDB লাইব্রেরি লোড হয়নি! (Network/CDN Blocked)");
                 }
 
                 statusDiv.innerText = "DuckDB বান্ডেল সিলেক্ট করা হচ্ছে...";
 
-                const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
-                const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+                const MANUAL_BUNDLES = {
+                    mvp: {
+                        mainModule: 'https://unpkg.com/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-mvp.wasm',
+                        mainWorker: 'https://unpkg.com/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-browser-mvp.worker.js',
+                    },
+                    eh: {
+                        mainModule: 'https://unpkg.com/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-eh.wasm',
+                        mainWorker: 'https://unpkg.com/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-browser-eh.worker.js',
+                    },
+                };
 
+                const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
+                
                 // CORS সমস্যা এড়াতে Blob URL দিয়ে Worker তৈরি করা
                 const worker_url = URL.createObjectURL(
                     new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' })
@@ -80,12 +97,12 @@
                 const logger = new duckdb.ConsoleLogger();
 
                 db = new duckdb.AsyncDuckDB(logger, worker);
-                await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+                await db.instantiate(bundle.mainModule);
                 conn = await db.connect();
 
                 statusDiv.innerText = "জিপ ফাইল রেজিস্টার করা হচ্ছে...";
 
-                // জিপ ফাইল DuckDB তে রেজিস্টার
+                // জিপ ফাইল DuckDB তে রেজিস্টার করা
                 await db.registerFileURL('data.zip', ZIP_FILE_URL, duckdb.DuckDBDataProtocol.HTTP, false);
 
                 statusDiv.innerText = "সার্চ ইঞ্জিন প্রস্তুত! আপনি এখন সার্চ করতে পারেন।";
